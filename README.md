@@ -1,5 +1,5 @@
 [![License: CC0](https://img.shields.io/badge/license-CC0_1.0-lightgrey.svg?style=plastic)](https://creativecommons.org/publicdomain/zero/1.0/)
-![Built With Love](https://img.shields.io/badge/built%20with-%E2%9D%A4%20by%20DeuZa-red?style=plastic)  
+![Built With Love](https://img.shields.io/badge/built%20with-%E2%9D%A4%20by%20DeuZa-red?style=plastic)
 ![Hack The Planet](https://img.shields.io/badge/hack-the--planet-black?style=flat-square&logo=gnu&logoColor=white)
 
 # tarsnap-stats
