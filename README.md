@@ -112,6 +112,11 @@ from `--humanize-numbers` by design.
 
 ## Install
 
+Download the script using `curl` or `wget` :
+
+
+ 
+
 ```
 git clone https://github.com/deuza/tarsnap-stats.git
 cd tarsnap-stats
