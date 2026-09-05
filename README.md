@@ -112,16 +112,22 @@ from `--humanize-numbers` by design.
 
 ## Install
 
-Download the script using `curl` or `wget` :
+Download the script directly using `curl` :
+```
+curl -fsSLO https://raw.githubusercontent.com/deuza/tarsnap-stats/main/tarsnap-stats.sh
+chmod +x tarsnap-stats.sh
+```
 
-
- 
-
+or `wget` :
+```
+wget https://raw.githubusercontent.com/deuza/tarsnap-stats/main/tarsnap-stats.sh
+chmod +x tarsnap-stats.sh
+```
+or clone the entire repository using Git :
 ```
 git clone https://github.com/deuza/tarsnap-stats.git
 cd tarsnap-stats
 chmod +x tarsnap-stats.sh
-./tarsnap-stats.sh
 ```
 
 There is nothing to configure. The script reads your existing `tarsnap.conf`,
