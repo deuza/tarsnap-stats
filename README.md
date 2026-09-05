@@ -101,7 +101,7 @@ Every figure follows from those four numbers:
 | All archives ratio | 619831444714 / 647226578282 | 95.8% |
 | Unique data ratio | 8566901824 / 9209227991 | 93.0% |
 | Monthly cost | 8566901824 x 250e-12 | $2.1417 |
-| Daily cost | monthly / 30 days in September | $0.071391 |
+| Daily cost | monthly / number of days in the current month (30 in September) | $0.071391 |
 
 In `-b` mode the same bytes are divided by 2^30 instead, which is why 647.23 GB
 and 602.78 GiB are the same amount of data.
@@ -147,7 +147,7 @@ usage: ./tarsnap-stats.sh [-b] [-k keyfile]
 | Variable | Effect |
 | --- | --- |
 | `TARSNAP_KEYFILE` | same as `-k` |
-| `TARSNAP_SPINNER=0` | disable the progress display |
+| `TARSNAP_SPINNER` | =0 disable the progress display |
 | `TARSNAP` | path to the tarsnap binary (a path only, not a command with arguments) |
 
 `-k` is meant for a key of **this** machine sitting somewhere unusual. It is
@@ -215,7 +215,7 @@ invocation instead. It costs nothing extra there.
   never opens multiple connections to the Tarsnap servers.
 - The daily cost divides by the real length of the current month, not by a flat
   30, because tarsnap bills per byte-day. In February the difference is about
-  7%.
+  7%. 
 - With a passphrase-protected key you will be prompted twice, once per
   key-using call. That is how tarsnap works, not something the script can
   avoid.
