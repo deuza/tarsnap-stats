@@ -234,7 +234,4 @@ invocation instead. It costs nothing extra there.
 `CC0 1.0 Universal` -- Public Domain.  
 [![CC0](https://mirrors.creativecommons.org/presskit/buttons/88x31/svg/cc-zero.svg)](https://creativecommons.org/publicdomain/zero/1.0/)    
 
-## Author
-<a href="https://github.com/deuza">DeuZa</a>
-
 <p align="center">With ❤️ by <a href="https://github.com/deuza">DeuZa</a></p></sup></sub>
