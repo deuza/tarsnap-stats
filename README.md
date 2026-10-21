@@ -7,7 +7,8 @@
 A small POSIX `sh` wrapper that turns `tarsnap --print-stats` into a readable
 summary: snapshot count, sizes, deduplication ratios and storage cost.
 
-No dependency beyond a shell, `awk` and `tarsnap` itself.
+No dependency beyond a POSIX shell, the usual base utilities (`awk`, `grep`,
+`tail`, `date`, `mktemp`...) and `tarsnap` itself; `stdbuf` is optional.
 
 ## Why
 
@@ -112,22 +113,21 @@ from `--humanize-numbers` by design.
 
 ## Install
 
-Download the script directly using `curl` :
+Download the script directly using `curl`:
 ```
 curl -fsSLO https://raw.githubusercontent.com/deuza/tarsnap-stats/main/tarsnap-stats.sh
 chmod +x tarsnap-stats.sh
 ```
 
-or `wget` :
+or `wget`:
 ```
 wget https://raw.githubusercontent.com/deuza/tarsnap-stats/main/tarsnap-stats.sh
 chmod +x tarsnap-stats.sh
 ```
-or clone the entire repository using Git :
+or clone the entire repository using Git, which keeps the script executable:
 ```
 git clone https://github.com/deuza/tarsnap-stats.git
 cd tarsnap-stats
-chmod +x tarsnap-stats.sh
 ```
 
 There is nothing to configure. The script reads your existing `tarsnap.conf`,
@@ -142,12 +142,12 @@ usage: ./tarsnap-stats.sh [-b] [-k keyfile]
                says it is (default there is usually /root/tarsnap.key)
 ```
 
-`-h` and `--help` print that. Two environment variables are honoured:
+`-h` and `--help` print that. Three environment variables are honoured:
 
 | Variable | Effect |
 | --- | --- |
 | `TARSNAP_KEYFILE` | same as `-k` |
-| `TARSNAP_SPINNER` | =0 disable the progress display |
+| `TARSNAP_SPINNER` | set to 0 to disable the progress display |
 | `TARSNAP` | path to the tarsnap binary (a path only, not a command with arguments) |
 
 `-k` is meant for a key of **this** machine sitting somewhere unusual. It is
@@ -165,14 +165,15 @@ archive received are shown on stderr:
 ```
 
 It only appears when stderr is a terminal, so nothing pollutes your logs, and
-stdout stays clean and pipeable in every case. Nothing at all is drawn before
-the first archive arrives, so the progress line can never land on top of a
-passphrase prompt.
+stdout stays clean and pipeable in every case. With the live count, nothing
+at all is drawn before the first archive arrives, so the progress line can
+never land on top of a passphrase prompt.
 
 The live count needs `stdbuf(1)`, shipped with GNU coreutils and with the
 FreeBSD base system, otherwise tarsnap fills a 4 kB stdio buffer before
 anything reaches the file being watched. Without it, the script falls back to
-a plain spinner.
+a plain spinner, which starts drawing at once and may therefore overlap a
+passphrase prompt; set `TARSNAP_SPINNER=0` to disable it.
 
 ## Exit codes
 
@@ -216,7 +217,7 @@ invocation instead. It costs nothing extra there.
   never opens multiple connections to the Tarsnap servers.
 - The daily cost divides by the real length of the current month, not by a flat
   30, because tarsnap bills per byte-day. In February the difference is about
-  7%. 
+  7%.
 - With a passphrase-protected key you will be prompted twice, once per
   key-using call. That is how tarsnap works, not something the script can
   avoid.
@@ -235,4 +236,4 @@ invocation instead. It costs nothing extra there.
 `CC0 1.0 Universal` -- Public Domain.  
 [![CC0](https://mirrors.creativecommons.org/presskit/buttons/88x31/svg/cc-zero.svg)](https://creativecommons.org/publicdomain/zero/1.0/)    
 
-<p align="center">With ❤️ by <a href="https://github.com/deuza">DeuZa</a></p></sup></sub>
+<p align="center">With ❤️ by <a href="https://github.com/deuza">DeuZa</a></p>
