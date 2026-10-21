@@ -169,9 +169,10 @@ stdout stays clean and pipeable in every case. Nothing at all is drawn before
 the first archive arrives, so the progress line can never land on top of a
 passphrase prompt.
 
-The live count needs `stdbuf(1)` from GNU coreutils, otherwise tarsnap fills a
-4 kB stdio buffer before anything reaches the file being watched. Without it
-(BSD, macOS) the script falls back to a plain spinner.
+The live count needs `stdbuf(1)`, shipped with GNU coreutils and with the
+FreeBSD base system, otherwise tarsnap fills a 4 kB stdio buffer before
+anything reaches the file being watched. Without it, the script falls back to
+a plain spinner.
 
 ## Exit codes
 
