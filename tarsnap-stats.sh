@@ -33,8 +33,11 @@
 #     writing to it, which can yield an inconsistent snapshot.
 #   - a passphrase-protected key file cannot be unlocked without a terminal,
 #     so the script simply fails under cron.
-#   - with -k/-c, the borrowed cache directory drifts out of sync and would
-#     need a --fsck, which is a heavy network operation.
+#   - with -k pointing at another machine's key, the snapshot count comes
+#     from that machine and the sizes from this one (see "Key file" above),
+#     and nobody reads the figures of an unattended run to notice the mix.
+#     This script never writes to the cache directory: neither
+#     --list-archives nor --print-stats can put it out of sync.
 # If you want the numbers automatically, call tarsnap with --print-stats from
 # your backup script instead: it costs nothing extra there.
 #
@@ -43,6 +46,18 @@
 # calls run, so a passphrase is never requested for a run that was going to
 # abort anyway. Note that each of those two calls loads the key file
 # independently, so a passphrase-protected key is prompted for twice.
+#
+# Passphrase method: -p METHOD is passed to every tarsnap call as
+# "--passphrase METHOD" (tarsnap 1.0.40 or later), so that a protected key
+# can be unlocked without typing the passphrase twice: env:VAR reads it from
+# an environment variable, file:PATH from a file, and dev:tty-stdin or
+# dev:tty-once keep the prompt. A "passphrase" line in tarsnap.conf does the
+# same job; -p wins over it, since options given on the command line are
+# processed before the configuration files. dev:stdin-once is refused: the
+# key is loaded twice, and the second call would find stdin already read.
+# Any other value is refused before tarsnap runs, and never repeated in the
+# message: tarsnap 1.0.41 copies an unparsable method to stderr, which would
+# print the passphrase itself if it was given instead of a method.
 #
 # Progress is reported on stderr only, and only when stderr is a terminal:
 # stdout stays clean so the output can be piped or redirected as-is. While the
@@ -63,6 +78,9 @@
 #   6  unrecognised "tarsnap --print-stats" output
 #   7  could not create a temporary file
 #   8  -k points at an unreadable key file
+#   9  the tarsnap binary was not found or is not executable
+#   128 + N  stopped by signal N, after cleaning up: 129 HUP (terminal
+#      closed), 130 INT (Ctrl-C), 131 QUIT (Ctrl-\), 143 TERM
 
 # -e: abort on the first unhandled failure rather than carrying on with bad
 #     data; every call whose failure we want to inspect ourselves is written
@@ -85,16 +103,24 @@ export LC_ALL
 # one single command name.
 TARSNAP=${TARSNAP:-tarsnap}
 KEYFILE=${TARSNAP_KEYFILE:-}      # empty: let tarsnap.conf decide
+# Passphrase method given with -p; empty: let tarsnap.conf decide. No
+# environment variable on purpose: a variable named after the passphrase
+# invites exporting the passphrase itself, which would end up in argv.
+PASSPHRASE=''
+popt=0
 TSOPT='--no-aggressive-networking'
 # 1000 = SI prefixes (default, matches tarsnap), 1024 = binary prefixes.
 BASE=1000
 
 usage() {
     cat <<EOF
-usage: $0 [-b] [-k keyfile]
+usage: $0 [-b] [-k keyfile] [-p method]
   -b           use binary prefixes (KiB/MiB/GiB) instead of SI ones
   -k keyfile   key file of this machine, when it is not where tarsnap.conf
                says it is (default there is usually /root/tarsnap.key)
+  -p method    how tarsnap reads the passphrase of a protected key file:
+               env:VAR, file:PATH, dev:tty-stdin or dev:tty-once
+               (tarsnap 1.0.40 or later)
 EOF
 }
 
@@ -108,10 +134,11 @@ esac
 # The leading ':' selects getopts' silent mode: the shell keeps its own
 # "Illegal option" message to itself and we report the problem ourselves, so
 # the wording is the same whichever shell runs the script.
-while getopts ':bk:h' opt; do
+while getopts ':bk:p:h' opt; do
     case "$opt" in
         b) BASE=1024 ;;
         k) KEYFILE=$OPTARG ;;
+        p) PASSPHRASE=$OPTARG; popt=1 ;;
         h) usage; exit 0 ;;
         :) printf '%s: option -%s requires an argument\n' "$0" "$OPTARG" >&2
            usage >&2; exit 2 ;;
@@ -130,6 +157,25 @@ if [ "$#" -gt 0 ]; then
     exit 2
 fi
 
+# The -p value is checked against the methods tarsnap knows, before any
+# tarsnap call. The messages below never print the value: see the header.
+if [ "$popt" -eq 1 ]; then
+    case "$PASSPHRASE" in
+        dev:tty-stdin|dev:tty-once|env:?*|file:?*) ;;
+        dev:stdin-once)
+            printf '%s: -p dev:stdin-once cannot work here: the key file is\n' \
+                "$0" >&2
+            printf '  loaded twice, and the second call would find stdin empty\n' >&2
+            usage >&2
+            exit 2 ;;
+        *)
+            printf '%s: -p: not a passphrase method (value not shown)\n' \
+                "$0" >&2
+            usage >&2
+            exit 2 ;;
+    esac
+fi
+
 # "tarsnap --verify-config" validates the configuration syntax, it does not
 # look at the key file at all, so check it here to fail with a useful message
 # rather than with tarsnap's "Cannot read key file" three calls later.
@@ -143,9 +189,22 @@ fi
 # "tarsnap --keyfile /path" would be looked up as one single command name.
 # Verified against tarsnap 1.0.41: --keyfile is accepted by --verify-config,
 # --list-archives and --print-stats alike.
-set -- "$TSOPT"
+# --no-humanize-numbers: the formatting below needs raw byte counts. With
+# "humanize-numbers" in a configuration file, --print-stats would print
+# "617 GB" instead of 617201465344, awk would read the mantissa and the unit
+# as the two numbers, and every size, ratio and cost would come out wrong
+# with an exit status of 0. Options given on the command line are processed
+# before the configuration files, and a configuration option already set is
+# then ignored without a word (tar/bsdtar.c in 1.0.41), so this one always
+# wins. Available since tarsnap 1.0.25.
+set -- "$TSOPT" --no-humanize-numbers
 if [ -n "$KEYFILE" ]; then
     set -- "$@" --keyfile "$KEYFILE"
+fi
+# The method is one argv element, whatever it holds: a path with blanks in
+# file:PATH reaches tarsnap intact.
+if [ "$popt" -eq 1 ]; then
+    set -- "$@" --passphrase "$PASSPHRASE"
 fi
 
 # --- Temporary file and cleanup ---------------------------------------------
@@ -161,17 +220,28 @@ cleanup() {
         spinner_pid=''
         # Blank the line with a fixed-width field: no ANSI escape needed, so
         # this also behaves on a dumb terminal.
-        printf '\r%78s\r' '' >&2
+        # "|| true": after a HUP the terminal is gone and this write fails
+        # with EIO. Under set -e, bash would then leave cleanup() right here
+        # and the temporary file below would never be removed.
+        printf '\r%78s\r' '' >&2 || true
     fi
     [ -n "$tmpout" ] && rm -f "$tmpout"
     return 0
 }
 
 # The progress line and the temporary file must never outlive the script.
-# cleanup() is idempotent, so the INT/TERM handlers re-entering it via the
+# cleanup() is idempotent, so the signal handlers re-entering it via the
 # EXIT trap is harmless.
+# HUP and QUIT need their own handler: a non-interactive dash keeps their
+# default action, which kills the script without running the EXIT trap, so
+# the temporary file stayed behind and, after Ctrl-\, the spinner went on
+# drawing over the prompt. Under bash, a HUP did run the EXIT trap, but see
+# the "|| true" in cleanup(). The exit statuses are 128 + the signal number,
+# as the shell itself would report them.
 trap 'cleanup' EXIT
+trap 'cleanup; exit 129' HUP
 trap 'cleanup; exit 130' INT
+trap 'cleanup; exit 131' QUIT
 trap 'cleanup; exit 143' TERM
 
 tmpout=$(mktemp "${TMPDIR:-/tmp}/tarsnap-stats.XXXXXX") || {
@@ -194,6 +264,16 @@ else
 fi
 
 # --- Progress reporting -----------------------------------------------------
+# Prints $1 with every byte outside printable ASCII replaced by "?". Archive
+# names are written by --list-archives exactly as they were stored, and
+# tarsnap restricts nothing at creation: a name holding ESC or CR would
+# otherwise drive the terminal. Same convention as shown() in
+# tarsnap-backup.sh, with sed found through PATH like every binary here.
+# LC_ALL=C, exported above, makes the range a range of bytes.
+shown() {
+    printf '%s\n' "$1" | sed 's/[^ -~]/?/g'
+}
+
 # $1: label used until the first line of output shows up (plain spinner mode)
 # $2: "count" to report live progress from $tmpout, anything else for a plain
 #     spinner.
@@ -205,6 +285,12 @@ spin_start() {
     {
         while :; do
             for frame in '|' '/' '-' "\\"; do
+                # The spinner is a background job: if the script dies on a
+                # signal it cannot trap (KILL) or that the shell does not
+                # trap, nobody is left to stop it. It checks every frame that
+                # its parent ($$ keeps the parent's PID in a subshell) still
+                # exists, and leaves quietly when it does not.
+                kill -0 "$$" 2>/dev/null || exit 0
                 if [ "$_mode" = count ]; then
                     # Strictly nothing is drawn until the first archive name
                     # has arrived: during that window tarsnap may still be
@@ -216,6 +302,9 @@ spin_start() {
                         # columns.
                         _n=$(grep -c . "$tmpout" 2>/dev/null || echo 0)
                         _last=$(tail -n 1 "$tmpout" 2>/dev/null || true)
+                        # Control bytes neutralised before they reach the
+                        # terminal, see shown().
+                        _last=$(shown "$_last")
                         [ "$_n" -eq 1 ] && _word=archive || _word=archives
                         printf '\r%s %d %s, last: %.40s' \
                             "$frame" "$_n" "$_word" "$_last" >&2
@@ -237,7 +326,8 @@ spin_stop() {
     kill "$spinner_pid" 2>/dev/null || true
     wait "$spinner_pid" 2>/dev/null || true
     spinner_pid=''
-    printf '\r%78s\r' '' >&2
+    # "|| true": same reason as in cleanup().
+    printf '\r%78s\r' '' >&2 || true
 }
 
 # --- Pre-flight check -------------------------------------------------------
@@ -247,6 +337,17 @@ spin_stop() {
 # tarsnap prints the offending line on stderr by itself, we only add context.
 rc=0
 "$TARSNAP" "$@" --verify-config || rc=$?
+# 126 and 127 come from the shell, not from tarsnap, which exits with 1 or
+# 2 on errors: the binary could not be run at all ("Permission denied",
+# "not found", printed by the shell just above). Reporting that as a
+# rejected configuration sent the reader looking in the wrong place. This
+# is the first tarsnap call, so the check is only needed here.
+if [ "$rc" -eq 126 ] || [ "$rc" -eq 127 ]; then
+    printf '%s: cannot run the tarsnap binary: %s\n' "$0" "$TARSNAP" >&2
+    printf '  (exit status %d) - not found in PATH, or not executable\n' \
+        "$rc" >&2
+    exit 9
+fi
 if [ "$rc" -ne 0 ]; then
     printf '%s: "tarsnap --verify-config" rejected the configuration\n' \
         "$0" >&2
@@ -345,6 +446,16 @@ END {
     if (!got_all || !got_uniq) {
         print "unrecognised --print-stats output: no \"All archives\"" \
             " and/or \"(unique data)\" row found" > "/dev/stderr"
+        exit 1
+    }
+    # The four figures must be plain byte counts. --no-humanize-numbers is
+    # passed above, but a tarsnap that ignored it, or a future change of the
+    # table, would otherwise be turned into wrong figures without an error:
+    # awk reads "3.0" as 3 and "MB" as 0.
+    if (all_total !~ /^[0-9]+$/ || all_comp !~ /^[0-9]+$/ ||
+        uniq_total !~ /^[0-9]+$/ || uniq_comp !~ /^[0-9]+$/) {
+        print "unrecognised --print-stats output: the sizes are not" \
+            " plain byte counts" > "/dev/stderr"
         exit 1
     }
 
